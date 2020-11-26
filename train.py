@@ -77,10 +77,9 @@ def VGAN_Generate(G, z_dim, num_generate, GPU):
     z = torch.randn(num_generate, z_dim)
     if GPU:
         G = G.cuda()
-        z=z.cuda()
-    z = torch.randn(num_generate, z_dim)
+        z = z.cuda()
     X = G(z).detach().numpy()
-    X[:,-1]=(X[:,-1]>0.5).astype(np.int)
+    X[:, -1] = (X[:, -1] > 0.5).astype(np.int)
     # for i in range(num_generate):
     #     z = torch.randn(1, z_dim)
     #     if GPU:
