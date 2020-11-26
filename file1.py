@@ -13,8 +13,10 @@ import matplotlib.pyplot as plt
 
 mean1 = [2, 3]
 mean2 = [6, 7]
-cov1 = [[2, 1], [1, 2]]
-cov2 = [[0.7, 1], [1, 0.7]]
+cov1 = [[10, 5], [10, 20]]
+cov2 = [[7, 10], [10, 7]]
+num1=4000
+num2=1000
 
 
 def plot_Data(X):
@@ -34,8 +36,9 @@ def LoadParams(dataset, cond=False):
 
 if __name__ == '__main__':
     GPU=torch.cuda.is_available()
+    print('GPU:{}'.format(GPU))
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    X = RandomDataset()
+    X = RandomDataset(num1,num2)
     params = LoadParams('random')
     G = VGAN_generator(z_dim=params["z_dim"], hidden_dim=params['hidden_dim'], x_dim=params['x_dim'], num_layer=params['num_layer'],
                        col_types=params['col_types'],
