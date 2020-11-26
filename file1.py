@@ -15,8 +15,8 @@ mean1 = [2, 3]
 mean2 = [6, 7]
 cov1 = [[10, 5], [10, 20]]
 cov2 = [[7, 10], [10, 7]]
-num1=400
-num2=10
+num1=4000
+num2=1000
 
 
 def plot_Data(X,name):
@@ -48,7 +48,7 @@ if __name__ == '__main__':
                        col_idxes=params['col_idxes'], condition=params['condition'], c_dim=0)
     D = VGAN_discriminator(hidden_dim=params['hidden_dim'], x_dim=params['x_dim'], num_layer=params['num_layer']
                        ,condition=params['condition'], c_dim=0)
-    VGAN_train(X, G, D, epochs=25, lr=3e-5,
+    VGAN_train(X, G, D, epochs=200, lr=3e-5,
                z_dim=8, print_every=10, GPU=GPU)
     X1=VGAN_Generate(G,z_dim=params["z_dim"],num_generate=40,GPU=GPU)
     plot_Data(X,'original')
