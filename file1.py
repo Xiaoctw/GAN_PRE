@@ -36,6 +36,7 @@ def LoadParams(dataset, cond=False):
 
 if __name__ == '__main__':
     GPU=torch.cuda.is_available()
+    plt.switch_backend('agg')
     print('GPU:{}'.format(GPU))
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     X = RandomDataset(num1,num2)
