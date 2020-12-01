@@ -1,10 +1,9 @@
 {
-  "z_dim":8,
-  "hidden_dim":16,
+  "z_dim":16,
+  "hidden_dim":64,
   "x_dim":3,
-  "num_layer":2,
+  "num_layer":4,
   "col_types":["ordinal", "ordinal", "binary"],
   "col_idxes":[[0, 0],[1, 1],[2, 2]],
-  "condition":false,
   "c_dim":0
 }
