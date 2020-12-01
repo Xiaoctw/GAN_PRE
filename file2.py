@@ -22,6 +22,7 @@ generate_every = 40
 step_per_epoch = 32
 
 if __name__ == '__main__':
+    plt.switch_backend('agg')
     GPU = torch.cuda.is_available()
     print('GPU:{}'.format(GPU))
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
