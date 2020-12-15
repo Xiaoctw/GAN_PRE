@@ -1,0 +1,9 @@
+{
+  "z_dim":16,
+  "hidden_dim":64,
+  "x_dim":11,
+  "num_layer":4,
+  "col_types":["ordinal","ordinal", "ordinal", "ordinal", "ordinal", "ordinal", "one-hot", "one-hot"],
+  "col_idxes":[[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 7], [8, 10]],
+  "c_dim":8
+}
