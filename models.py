@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from sklearn.manifold import TSNE
 
 class VCGAN_generator(nn.Module):
     """

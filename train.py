@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data as Data
 from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 import random
 
 from datasets import *
@@ -71,7 +72,7 @@ def CGAN_train(X, Y, G, D, dataset, epochs, lr_gen, lr_dis, z_dim, col_types, co
     loss = torch.nn.BCELoss()
     data_loader = Data.DataLoader(dataset=data_set, batch_size=step_per_epoch, shuffle=True)
     g_losses, d_losses = [], []
-    for epoch in range(epochs):
+    for epoch in range(1, epochs + 1):
         for i, (batch_X, batch_y) in enumerate(data_loader):
             batch_size = batch_X.shape[0]
             real_labels = torch.empty(batch_size, 1).fill_(real_label)
@@ -85,16 +86,17 @@ def CGAN_train(X, Y, G, D, dataset, epochs, lr_gen, lr_dis, z_dim, col_types, co
             if GPU:
                 noise, gen_c = noise.cuda(), gen_c.cuda()
             gen_X = G(noise, gen_c)
-           # print('gen_x:{}'.format(gen_X.shape))
+            # print('gen_x:{}'.format(gen_X.shape))
             D_optim.zero_grad()
             # print(batch_X.shape)
             # print(batch_y.shape)
             validity_real = D(batch_X, batch_y)
             d_real_loss = F.binary_cross_entropy(validity_real, real_labels)
             validity_gen = D(gen_X, gen_c)
-          #  print(validity_gen)
+            #  print(validity_gen)
             d_fake_loss = F.binary_cross_entropy(validity_gen, fake_labels)
             d_loss = d_real_loss + d_fake_loss
+
             G_optim.zero_grad()
             D_optim.zero_grad()
             d_loss.backward()
@@ -107,11 +109,11 @@ def CGAN_train(X, Y, G, D, dataset, epochs, lr_gen, lr_dis, z_dim, col_types, co
                 noise, gen_c = noise.cuda(), gen_c.cuda()
             gen_X = G(noise, gen_c)
             gen_label = D(gen_X, gen_c)
-            #在这里，损失函数是为了让标签的分布更加靠近真实标签分布，
-            #添加了一个KL散度的部分是为了让生成的数据各个属性上的均值和标准分布更加接近。
+            # 在这里，损失函数是为了让标签的分布更加靠近真实标签分布，
+            # 添加了一个KL散度的部分是为了让生成的数据各个属性上的均值和标准分布更加接近。
             g_loss = loss(gen_label, real_labels)
-            kl_loss = KL_Loss(gen_X, X, gen_c, Y, col_types, col_idxes)
-            g_loss += kl_loss
+            #     kl_loss = KL_Loss(gen_X, X, gen_c, Y, col_types, col_idxes)
+            #    g_loss += kl_loss
             g_loss.backward(retain_graph=True)
             g_losses.extend([g_loss.data.item()] * batch_size)
             G_optim.step()
@@ -127,21 +129,114 @@ def CGAN_train(X, Y, G, D, dataset, epochs, lr_gen, lr_dis, z_dim, col_types, co
             gen_c = gen_c.cpu().detach().numpy()
             gen_X = PCA(n_components=2, ).fit_transform(gen_X)
             plt.scatter(gen_X[:, 0], gen_X[:, 1], c=gen_c)
-            plt.savefig('{}_{}'.format(dataset, epoch))
+            plt.savefig('pictures/{}_{}.png'.format(dataset, epoch))
             plt.cla()
             G.train()
             D.train()
-
         if epoch % print_every == 0:
-            print("epoch:{},g_loss:{},d_loss:{}".format(epoch, np.mean(g_losses), np.mean(g_losses)))
+            print("epoch:{}, g_loss:{:.3f}, d_loss:{:.3f}".format(epoch, np.mean(g_losses), np.mean(d_losses)))
 
 
-def CGAN_Generate(G, z_dim, c, num_gen, GPU):
-    z = torch.randn(num_gen, z_dim)
-    c = torch.empty(num_gen, ).fill_(c)
+def WGAN_train(X, Y, G, D, dataset, epochs, lr_gen, lr_dis, z_dim, col_types, col_idxes, cp=0.1,
+               print_every=10,
+               generate_every=50,
+               num_gen=50, step_per_epoch=32, GPU=False):
+    G.train()
+    D.train()
     if GPU:
-        G = G.cuda()
-        z = z.cuda()
-        c = c.cuda()
-    X = G(z, c).cpu().detach().numpy()
-    return X
+        G.cuda()
+        D.cuda()
+    # 设定的真实值，小于1是因为要增大判别器的训练难度
+    real_label = 0.8
+    fake_label = 0
+    # 更改优化方法，WGAN中不能使用基于动量的方法
+    D_optim = optim.RMSprop(D.parameters(), lr=lr_dis)
+    G_optim = optim.RMSprop(G.parameters(), lr=lr_gen)
+    conditions = np.unique(Y)
+    num_c = int(np.max(conditions)) + 1
+    X = torch.from_numpy(X).float()
+    Y = torch.from_numpy(Y).long()
+    if GPU:
+        X = X.cuda()
+        Y = Y.cuda()
+    data_set = Data.TensorDataset(X, Y)
+    data_loader = Data.DataLoader(dataset=data_set, batch_size=step_per_epoch, shuffle=True)
+    g_losses, d_losses = [], []
+    for epoch in range(1, epochs + 1):
+        for i, (batch_X, batch_y) in enumerate(data_loader):
+            batch_size = batch_X.shape[0]
+            real_labels = torch.empty(batch_size, 1).fill_(real_label)
+            fake_labels = torch.empty(batch_size, 1).fill_(fake_label)
+            if GPU:
+                real_labels, fake_labels = real_labels.cuda(), fake_labels.cuda()
+            # 训练判别器
+            noise = torch.randn(batch_size, z_dim)
+            # 每次的标签都是随机生成的
+            gen_c = torch.randint(0, num_c, (batch_size,))
+            if GPU:
+                noise, gen_c = noise.cuda(), gen_c.cuda()
+            gen_X = G(noise, gen_c)
+            D_optim.zero_grad()
+            validity_real = D(batch_X, batch_y)
+            validity_gen = D(gen_X, gen_c)
+            d_loss = -torch.mean(validity_real) + torch.mean(validity_gen)
+            G_optim.zero_grad()
+            D_optim.zero_grad()
+            d_loss.backward()
+            d_losses.extend([d_loss.data.item()] * batch_size)
+            D_optim.step()
+            for p in D.parameters():
+                # 将值划分到某个范围内
+                p.data.clamp_(-cp, cp)  # clip the discriminator parameters (wgan)
+            # 训练生成器
+            noise = torch.randn(batch_size, z_dim)
+            gen_c = torch.randint(0, num_c, (batch_size,))
+            if GPU:
+                noise, gen_c = noise.cuda(), gen_c.cuda()
+            gen_X = G(noise, gen_c)
+            gen_label = D(gen_X, gen_c)
+            # 在这里，损失函数是为了让标签的分布更加靠近真实标签分布，
+            # 添加了一个KL散度的部分是为了让生成的数据各个属性上的均值和标准分布更加接近。
+            g_loss = -torch.mean(gen_label)
+            #     kl_loss = KL_Loss(gen_X, X, gen_c, Y, col_types, col_idxes)
+            #    g_loss += kl_loss
+            G_optim.zero_grad()
+            D_optim.zero_grad()
+            g_loss.backward(retain_graph=True)
+            g_losses.extend([g_loss.data.item()] * batch_size)
+            G_optim.step()
+
+        if epoch % generate_every == 0:
+            G.eval()
+            D.eval()
+            noise = torch.randn(num_gen, z_dim)
+            gen_c = torch.randint(0, num_c, (num_gen,))
+            if GPU:
+                noise, gen_c = noise.cuda(), gen_c.cuda()
+            gen_X = G(noise, gen_c).cpu().detach().numpy()
+            gen_c = gen_c.cpu().detach().numpy()
+            gen_X = PCA(n_components=2, ).fit_transform(gen_X)
+            plt.scatter(gen_X[:, 0], gen_X[:, 1], c=gen_c)
+            plt.savefig('pictures/{}_{}.png'.format(dataset, epoch))
+            plt.cla()
+            G.train()
+            D.train()
+        if epoch % print_every == 0:
+            print("epoch:{}, g_loss:{:.3f}, d_loss:{:.3f}".format(epoch, np.mean(g_losses), np.mean(d_losses)))
+
+
+def CGAN_Generate(G, z_dim, num_c, num_gen, dataset):
+    gen_c = torch.randint(0, num_c, (num_gen,))
+    noise = torch.randn(num_gen, z_dim)
+    # if GPU:
+    #     G=G.cuda()
+    #     noise, gen_c = noise.cuda(), gen_c.cuda()
+    G = G.cpu()
+    gen_X = G.generate(noise, gen_c)
+    data = torch.cat([gen_X, gen_c.float().view(-1, 1)], dim=1)
+    data = data.cpu().detach().numpy()
+    plot_data(data[:, :-1], data[:, -1])
+    df = pd.DataFrame(data, columns=None)
+    file_name = 'generated_data/{}.csv'.format(dataset)
+    df.to_csv(file_name, index=False)
+    # print(gen_X)

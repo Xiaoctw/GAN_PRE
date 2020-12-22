@@ -3,6 +3,8 @@ import numpy as np
 import warnings
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler, LabelEncoder
+from sklearn.decomposition import PCA
+from sklearn.mixture import GaussianMixture
 import json
 
 warnings.filterwarnings("ignore")
@@ -39,31 +41,21 @@ class DataSet:
 def RandomDataset(num_positive, num_negative):
     mean1 = [2, 3]
     mean2 = [6, 7]
+    mean3 = [-4, -5]
     cov1 = [[2, 1], [1, 2]]
     cov2 = [[0.7, 1], [1, 0.7]]
     X1 = np.random.multivariate_normal(mean1, cov1, num_positive)
     X2 = np.random.multivariate_normal(mean2, cov2, num_negative)
-    X3 = np.random.multivariate_normal([-10, -10], cov2, 2)
-    Y1 = np.ones(num_positive)
-    Y2 = np.zeros(num_negative + 2)
-    X = np.concatenate([X1, X2, X3])
-    X = 2 * MinMaxScaler().fit_transform(X) - 1
-    Y = np.concatenate([Y1, Y2]).reshape(-1, 1)
-    return np.concatenate([X, Y], axis=1)
-
-
-def RandomDatasetCondition(num_positive, num_negative):
-    mean1 = [2, 3]
-    mean2 = [2, 10]
-    cov1 = [[2, 1], [1, 2]]
-    cov2 = [[0.7, 1], [1, 0.7]]
-    X1 = np.random.multivariate_normal(mean1, cov1, num_positive)
-    X2 = np.random.multivariate_normal(mean2, cov2, num_negative)
+    X3 = np.random.multivariate_normal(mean3, cov2, num_negative)
     Y1 = np.ones(num_positive)
     Y2 = np.zeros(num_negative)
-    X = np.concatenate([X1, X2])
-    X = (2 * MinMaxScaler().fit_transform(X)) / 2
-    Y = np.concatenate([Y1, Y2]).reshape(-1, )
+    Y3 = np.zeros(num_negative)
+    X = np.concatenate([X1, X2, X3])
+    data = []
+    for i in range(X.shape[1]):
+        data.append(GMM(X[:, i], n_components=2))
+    Y = np.concatenate([Y1, Y2, Y3]).reshape(-1, )
+    X = np.concatenate(data, axis=1)
     return X, Y
 
 
@@ -94,15 +86,59 @@ def Yeast():
     for feat in cat_list:
         cat_feat, num_one_hot = one_hot_feature(wild_data[feat])
         col_types.append('one-hot')
-        col_idxes.append([tem, tem + num_one_hot-1])
-        tem=tem+num_one_hot
+        col_idxes.append([tem, tem + num_one_hot - 1])
+        tem = tem + num_one_hot
         data.append(cat_feat)
     X = np.concatenate(data, axis=1)
-    # print('col_types:{}'.format(col_types))
-    # print("col_idxes:{}".format(col_idxes))
-    # print('x_dim:{}'.format(X.shape[1]))
-    # print('c_dim:{}'.format(np.unique(Y).shape[0]))
     return X, Y
+
+
+def GMM(X: np.ndarray, n_components=2) -> np.ndarray:
+    X = X.reshape(-1, 1)
+    gmm = GaussianMixture(n_components=n_components, covariance_type='full')
+    gmm.fit(X)
+    proba = gmm.predict_proba(X)
+    means = np.array(gmm.means_).reshape(-1, )
+    cov = np.array(gmm.covariances_).reshape(-1, )
+    types = np.argmax(proba, axis=1)  # (n,)
+    X = X.reshape(-1, )
+    c = (X - means[types]) / (2 * cov[types])
+    c=2*MinMaxScaler().fit_transform(c.reshape(-1,1))-1
+    return np.concatenate([c, proba], axis=1)
+
+
+def plot_data(X: np.ndarray, Y: np.ndarray) -> None:
+    gen_X = PCA(n_components=2, ).fit_transform(X)
+    plt.scatter(gen_X[:, 0], gen_X[:, 1], c=Y)
+    plt.show()
+
+
+def load_dataset(dataset):
+    X, Y = None, None
+    if dataset == 'random_condition':
+        num1 = 400
+        num2 = 60
+        X, Y = RandomDataset(num1, num2)
+    elif dataset == 'Wine':
+        X, Y = Wine()
+    elif dataset == 'Yeast':
+        X, Y = Yeast()
+    return X, Y
+
+
+def load_generated_dataset(dataset):
+    path = 'generated_data/{}.csv'.format(dataset)
+    data = pd.read_csv(path).values
+    X, Y = data[:, :-1], data[:, -1]
+    return X, Y
+
+
+def splitDataSet(X, Y, ratio):
+    idxes = np.random.permutation(X.shape[0])
+    test_size = int(X.shape[0] * ratio)
+    test_X, test_Y = X[idxes[:test_size]], Y[idxes[:test_size]]
+    train_X, train_Y = X[idxes[test_size:]], Y[idxes[test_size:]]
+    return train_X, train_Y, test_X, test_Y
 
 
 def one_hot_feature(arr):
@@ -116,6 +152,11 @@ def one_hot_feature(arr):
 
 
 if __name__ == '__main__':
-    X, Y = Yeast()
+    # X, Y = Wine()
+    # print(X.shape)
+    # print(Y.shape)
+    X, Y = RandomDataset(num_positive=400, num_negative=30)
     print(X.shape)
     print(Y.shape)
+    plot_data(X, Y)
+    print(X[:10])
